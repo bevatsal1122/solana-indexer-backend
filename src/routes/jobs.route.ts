@@ -134,7 +134,7 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       .from("logs")
       .insert({
         job_id: jobId,
-        message: errorMessage,
+        message: errorMessage + "Job ID: " + jobId + " Job Name: " + job.data.name + " Job Type: " + job.data.type.toUpperCase(),
         tag: "ERROR",
       });
 

@@ -8,6 +8,8 @@ const jobRouter: Router = express.Router();
 jobRouter.post("/create", async (req: Request, res: Response) => {
   const { jobId } = req.body;
 
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   console.log("Processing job:", jobId);
 
   const job = await supabase

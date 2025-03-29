@@ -21,7 +21,7 @@ app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 // Routes
-app.use("/api", apiRoutes);
+app.use("/", apiRoutes);
 
 // Root route
 app.get("/", (req: Request, res: Response) => {

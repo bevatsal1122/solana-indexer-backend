@@ -117,12 +117,12 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
 
     let errorMessage = "Unable to connect to the database";
     if (err.parent && err.parent.code === "ENOTFOUND") {
-      errorMessage = `Database host not found. Please check the hostname is correct.`;
+      errorMessage = `Database host not found. Please check the hostname is correct`;
     } else if (err.parent && err.parent.code === "ETIMEDOUT") {
       errorMessage =
-        "Connection to database timed out. Please check firewall settings or network connection.";
+        "Connection to database timed out. Please check firewall settings or network connection";
     } else if (err.parent && err.parent.code === "ECONNREFUSED") {
-      errorMessage = `Connection to database at ${db_host}:${db_port} was refused. Please check the port is open and the service is running.`;
+      errorMessage = `Connection to database at ${db_host}:${db_port} was refused. Please check the port is open and the service is running`;
     }
 
     const { data, error } = await supabase
@@ -136,7 +136,7 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       .from("logs")
       .insert({
         job_id: jobId,
-        message: errorMessage + "Job ID: " + jobId + " Job Name: " + job.data.name + " Job Type: " + job.data.type.toUpperCase(),
+        message: errorMessage + " for Job Type: " + job.data.type.toUpperCase(),
         tag: "ERROR",
       });
 

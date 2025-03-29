@@ -85,10 +85,16 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       .from("logs")
       .insert({
         job_id: jobId,
-        message: "Job started",
+        message:
+          "Job with id " +
+          jobId +
+          " and name " +
+          job.data.name +
+          " of type " +
+          job.data.type.toUpperCase() +
+          " started successfully",
         tag: "INFO",
       });
-
     if (error || jobError) {
       res.status(500).json({
         status: "error",

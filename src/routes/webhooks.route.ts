@@ -9,8 +9,8 @@ const router: Router = express.Router();
 router.post("/logs/:eventType", (req: Request, res: Response) => {
   const body = req.body;
   const headers = req.headers;
-  console.log(body);
-  console.log(headers);
+  console.dir(body, { depth: null });
+  console.dir(headers, { depth: null });
 
   res.status(200).json({
     status: "ok",

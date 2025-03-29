@@ -1,6 +1,13 @@
 import express, { Router, Request, Response } from "express";
 import supabase from "../lib/supabase";
 import { Sequelize, DataTypes } from "sequelize";
+import {
+  NFTMint,
+  NFTSale,
+  NFTListing,
+  CompressedMintNFT,
+  initializeModels,
+} from "../models";
 
 const jobRouter: Router = express.Router();
 
@@ -53,22 +60,25 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       jobId
     );
 
-    const IndexerData = sequelize.define(
-      "IndexerData",
-      {
-        name: {
-          type: DataTypes.STRING,
-          allowNull: false,
-        },
-        slot: {
-          type: DataTypes.INTEGER,
-          allowNull: false,
-        },
-      },
-      {
-        timestamps: true,
-      }
-    );
+    initializeModels(sequelize);
+
+    const jobType = job.data.type;
+
+    let IndexerData: any;
+
+    if (jobType.toLocaleLowerCase() === "nft_mint") {
+      IndexerData = NFTMint;
+    } else if (jobType.toLocaleLowerCase() === "nft_sale") {
+      IndexerData = NFTSale;
+    } else if (jobType.toLocaleLowerCase() === "nft_listing") {
+      IndexerData = NFTListing;
+    } else if (jobType.toLocaleLowerCase() === "compressed_mint_nft") {
+      IndexerData = CompressedMintNFT;
+    } else {
+      await sequelize.close();
+
+      throw new Error("Invalid job type");
+    }
 
     // Use force: false to not drop the table if it already exists
     const result = await IndexerData.sync({ force: false });
@@ -88,13 +98,7 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       .insert({
         job_id: jobId,
         message:
-          "Job with id " +
-          jobId +
-          " and name " +
-          job.data.name +
-          " of type " +
-          job.data.type.toUpperCase() +
-          " started successfully",
+          "Database connection successful and table created and job started successfully",
         tag: "INFO",
       });
     if (error || jobError) {
@@ -123,6 +127,8 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
         "Connection to database timed out. Please check firewall settings or network connection";
     } else if (err.parent && err.parent.code === "ECONNREFUSED") {
       errorMessage = `Connection to database at ${db_host}:${db_port} was refused. Please check the port is open and the service is running`;
+    } else if (err.message === "Invalid job type") {
+      errorMessage = "Invalid job type";
     }
 
     const { data, error } = await supabase
@@ -136,7 +142,7 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       .from("logs")
       .insert({
         job_id: jobId,
-        message: errorMessage + " for Job ID " + jobId + " Job Name: " + job.data.name + " Job Type: " + job.data.type.toUpperCase(),
+        message: errorMessage,
         tag: "ERROR",
       });
 

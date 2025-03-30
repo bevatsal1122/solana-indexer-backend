@@ -72,10 +72,8 @@ The application requires Redis for BullMQ and caching. You can:
 
 2. **Install Docker**:
 
-   ```bash
-   Download the docker.dmg from their official website and
-   install it locally.
-   ```
+   Download the [docker.dmg](https://www.docker.com/products/docker-desktop/) file from their official website and install it locally.
+
 
 3. **Run this command**:
    ```bash

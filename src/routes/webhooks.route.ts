@@ -26,15 +26,24 @@ const helius = new Helius("fdfd8c30-b1fd-4121-adec-94623d6ba124");
 
 const router: Router = express.Router();
 
-// POST /webhooks/log/:eventType
+// POST /webhooks/log
 router.post("/log", async (req: Request, res: Response) => {
-  const webhookData = req.body;
+  const webhookData = req.body[0];
   const headers = req.headers;
   console.dir(webhookData, { depth: null });
   console.dir(headers, { depth: null });
 
+  if (!webhookData) {
+    console.error("No webhook data provided");
+    return res.status(400).json({
+      status: "error",
+      message: "No webhook data provided",
+    });
+  }
+
+  console.log("Processing webhook data...");
+
   try {
-    // Map the Helius webhook type to our job type
     const transactionType = webhookData.type;
     let jobType;
 

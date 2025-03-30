@@ -162,9 +162,9 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
   }
 });
 
-// POST /jobs/stop
-jobRouter.post("/stop", async (req: Request, res: Response) => {
-  const { jobId } = req.body;
+// POST /jobs
+jobRouter.delete("/:jobId", async (req: Request, res: Response) => {
+  const { jobId } = req.params;
 
   if (!jobId) {
     return res.status(400).json({
@@ -177,7 +177,7 @@ jobRouter.post("/stop", async (req: Request, res: Response) => {
     const { data: job, error: fetchError } = await supabase
       .from("indexer_jobs")
       .select("*")
-      .eq("id", jobId)
+      .eq("id", parseInt(jobId, 10))
       .single();
 
     if (fetchError || !job) {

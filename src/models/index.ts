@@ -4,8 +4,6 @@ import { NFTListing } from './NFT_LISTING';
 import { NFTSale } from './NFT_SALE';
 import { CompressedMintNFT } from './COMPRESSED_MINT_NFT';
 
-// Models need to be initialized with a Sequelize instance
-// This function will be called explicitly when needed (in routes)
 export const initializeModels = (sequelize: Sequelize): void => {
   NFTMint.initialize(sequelize);
   NFTListing.initialize(sequelize);

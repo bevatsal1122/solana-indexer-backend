@@ -8,6 +8,7 @@ import {
   CompressedMintNFT,
   initializeModels,
 } from "../models";
+import { addJobToCache, removeJobFromCache } from "../lib/redis-cache";
 
 const jobRouter: Router = express.Router();
 
@@ -40,7 +41,6 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
   )}@${db_host}:${db_port}/${db_name}`;
 
   try {
-    // Create Sequelize instance
     const sequelize = new Sequelize(connectionString, {
       dialect: "postgres",
       logging: false,
@@ -75,7 +75,6 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       throw new Error("Invalid job type");
     }
 
-    // Use force: false to not drop the table if it already exists
     const result = await IndexerData.sync({ force: false });
     console.log("IndexerData table created successfully", result);
 
@@ -102,6 +101,16 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
         message: "Failed to update job status",
       });
       return;
+    }
+
+    const jobTypeForCache = jobType.toLowerCase();
+    try {
+      await addJobToCache(jobTypeForCache, job.data);
+      console.log(
+        `Added job ${jobId} to Redis cache for type ${jobTypeForCache}`
+      );
+    } catch (cacheError) {
+      console.error(`Error adding job to cache: ${cacheError}`);
     }
 
     res.status(200).json({
@@ -148,6 +157,57 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
     res.status(500).json({
       status: "error",
       message: errorMessage,
+      error: err.message,
+    });
+  }
+});
+
+// POST /jobs/stop
+jobRouter.post("/stop", async (req: Request, res: Response) => {
+  const { jobId } = req.body;
+
+  if (!jobId) {
+    return res.status(400).json({
+      status: "error",
+      message: "Job ID is required",
+    });
+  }
+
+  try {
+    const { data: job, error: fetchError } = await supabase
+      .from("indexer_jobs")
+      .select("*")
+      .eq("id", jobId)
+      .single();
+
+    if (fetchError || !job) {
+      return res.status(404).json({
+        status: "error",
+        message: "Job not found",
+      });
+    }
+
+    if (job.type) {
+      const jobType = job.type.toLowerCase();
+      try {
+        await removeJobFromCache(jobType, jobId);
+        console.log(
+          `Removed job ${jobId} from Redis cache for type ${jobType}`
+        );
+      } catch (cacheError) {
+        console.error(`Error removing job from cache: ${cacheError}`);
+      }
+    }
+
+    return res.status(200).json({
+      status: "ok",
+      message: "Job stopped successfully",
+    });
+  } catch (err: any) {
+    console.error("Error stopping job:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to stop job",
       error: err.message,
     });
   }

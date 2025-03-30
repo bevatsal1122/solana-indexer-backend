@@ -23,6 +23,17 @@ interface NFTListingAttributes {
   listingTime: number;
   listingState: string;
   tokenAccount: string;
+  description: string;
+  events: object;
+  fee: number;
+  instructions: object[];
+  nativeTransfers: object[];
+  source: string;
+  timestamp: number;
+  tokenTransfers: object[];
+  transactionError: string | null;
+  type: string;
+  accountData: object[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -53,6 +64,17 @@ class NFTListingModel extends Model<NFTListingAttributes, NFTListingInput> imple
   public listingTime!: number;
   public listingState!: string;
   public tokenAccount!: string;
+  public description!: string;
+  public events!: object;
+  public fee!: number;
+  public instructions!: object[];
+  public nativeTransfers!: object[];
+  public source!: string;
+  public timestamp!: number;
+  public tokenTransfers!: object[];
+  public transactionError!: string | null;
+  public type!: string;
+  public accountData!: object[];
   
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -152,6 +174,50 @@ export function initialize(sequelize: Sequelize): void {
       },
       tokenAccount: {
         type: DataTypes.STRING,
+        allowNull: true,
+      },
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      events: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      fee: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      instructions: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      nativeTransfers: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      source: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      timestamp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      tokenTransfers: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      transactionError: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      type: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      accountData: {
+        type: DataTypes.JSONB,
         allowNull: true,
       },
     },

@@ -25,6 +25,15 @@ interface NFTMintAttributes {
   uri: string;
   txFee: number;
   sellerFeeBasisPoints: number;
+  description: string;
+  events: object;
+  fee: number;
+  nativeTransfers: object[];
+  source: string;
+  timestamp: number;
+  tokenTransfers: object[];
+  transactionError: string | null;
+  type: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -57,6 +66,15 @@ class NFTMintModel extends Model<NFTMintAttributes, NFTMintInput> implements NFT
   public uri!: string;
   public txFee!: number;
   public sellerFeeBasisPoints!: number;
+  public description!: string;
+  public events!: object;
+  public fee!: number;
+  public nativeTransfers!: object[];
+  public source!: string;
+  public timestamp!: number;
+  public tokenTransfers!: object[];
+  public transactionError!: string | null;
+  public type!: string;
   
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -163,6 +181,42 @@ export function initialize(sequelize: Sequelize): void {
       },
       sellerFeeBasisPoints: {
         type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      events: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      fee: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      nativeTransfers: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      source: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      timestamp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      tokenTransfers: {
+        type: DataTypes.JSONB,
+        allowNull: true,
+      },
+      transactionError: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      type: {
+        type: DataTypes.STRING,
         allowNull: true,
       },
     },

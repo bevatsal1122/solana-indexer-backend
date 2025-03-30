@@ -35,11 +35,6 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
 
   const { db_host, db_name, db_password, db_port, db_user } = job.data;
 
-  // Log the connection details (without sensitive info)
-  console.log(
-    `Connecting to database: ${db_name} on host: ${db_host}:${db_port} as user: ${db_user}`
-  );
-
   const connectionString = `postgres://${db_user}:${encodeURIComponent(
     db_password
   )}@${db_host}:${db_port}/${db_name}`;
@@ -50,7 +45,7 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
       dialect: "postgres",
       logging: false,
       dialectOptions: {
-        connectTimeout: 30000, // 30 seconds timeout
+        connectTimeout: 30000,
       },
     });
 
@@ -66,13 +61,13 @@ jobRouter.post("/create", async (req: Request, res: Response) => {
 
     let IndexerData: any;
 
-    if (jobType.toLocaleLowerCase() === "nft_mint") {
+    if (jobType.toLowerCase() === "nft_mint") {
       IndexerData = NFTMint;
-    } else if (jobType.toLocaleLowerCase() === "nft_sale") {
+    } else if (jobType.toLowerCase() === "nft_sale") {
       IndexerData = NFTSale;
-    } else if (jobType.toLocaleLowerCase() === "nft_listing") {
+    } else if (jobType.toLowerCase() === "nft_listing") {
       IndexerData = NFTListing;
-    } else if (jobType.toLocaleLowerCase() === "compressed_mint_nft") {
+    } else if (jobType.toLowerCase() === "compressed_nft_mint") {
       IndexerData = CompressedMintNFT;
     } else {
       await sequelize.close();

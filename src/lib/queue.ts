@@ -7,50 +7,132 @@ dotenv.config();
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
+const REDIS_URL = process.env.REDIS_URL || '';
 
 export const ENABLE_BULL_MQ = process.env.ENABLE_BULL_MQ !== 'false';
 
 let redisConnection: Redis | null = null;
 
-try {
-  if (ENABLE_BULL_MQ) {
-    // Check if we need TLS based on the Redis URL or environment
-    const useTLS = process.env.REDIS_USE_TLS === 'true' || 
-                   REDIS_HOST.includes('redislabs') ||
-                   REDIS_HOST.includes('redis.cloud') ||
-                   REDIS_PORT === 6380;
-
-    console.log(`Connecting to Redis at ${REDIS_HOST}:${REDIS_PORT} with${useTLS ? '' : 'out'} TLS`);
+const tryConnect = async (config: any, description: string): Promise<Redis | null> => {
+  try {
+    console.log(`Attempting to connect to Redis with ${description}`);
+    const client = new Redis(config);
     
-    redisConnection = new Redis({
+    // Test connection with timeout
+    const connectPromise = new Promise<Redis>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`Connection timeout for ${description}`));
+      }, 5000);
+      
+      client.on('connect', () => {
+        clearTimeout(timeout);
+        console.log(`✅ Redis connection successful with ${description}`);
+        resolve(client);
+      });
+      
+      client.on('error', (err) => {
+        clearTimeout(timeout);
+        console.error(`❌ Redis connection failed with ${description}:`, err);
+        reject(err);
+      });
+    });
+    
+    return await connectPromise;
+  } catch (error) {
+    console.error(`Failed to connect with ${description}:`, error);
+    return null;
+  }
+};
+
+const initializeRedis = async () => {
+  if (!ENABLE_BULL_MQ) {
+    console.log('BullMQ is disabled, skipping Redis connection');
+    return null;
+  }
+  
+  // First, try connecting with connection string if provided
+  if (REDIS_URL) {
+    try {
+      const client = await tryConnect(REDIS_URL, "connection string");
+      if (client) return client;
+    } catch (error) {
+      console.warn('Connection with REDIS_URL failed, will try other methods');
+    }
+  }
+  
+  // Try with TLS
+  try {
+    const tlsConfig = {
       host: REDIS_HOST,
       port: REDIS_PORT,
       password: REDIS_PASSWORD || undefined,
       maxRetriesPerRequest: null,
-      tls: useTLS ? {} : undefined,  // Enable TLS only when needed
-      // Don't use TLS for localhost
-      ...(REDIS_HOST === 'localhost' ? { tls: undefined } : {})
-    });
-
-    redisConnection.on('error', (err) => {
-      console.error('Redis connection error:', err);
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('⚠️ Redis connection failed - BullMQ will be disabled');
-        process.env.ENABLE_BULL_MQ = 'false';
-      } else {
-        console.warn('⚠️ Redis connection error in production - will attempt to reconnect');
-      }
-    });
-
-    redisConnection.on('connect', () => {
-      console.log('✅ Redis connection established');
-    });
+      tls: {},
+      connectTimeout: 10000,
+    };
+    
+    const client = await tryConnect(tlsConfig, "TLS config");
+    if (client) return client;
+  } catch (error) {
+    console.warn('TLS connection failed, trying without TLS');
   }
-} catch (error) {
-  console.error('Failed to initialize Redis connection:', error);
-  console.warn('⚠️ Redis initialization failed - BullMQ will be disabled');
-  process.env.ENABLE_BULL_MQ = 'false';
-}
+  
+  // Try without TLS
+  try {
+    const nonTlsConfig = {
+      host: REDIS_HOST,
+      port: REDIS_PORT,
+      password: REDIS_PASSWORD || undefined,
+      maxRetriesPerRequest: null,
+      tls: undefined,
+      connectTimeout: 10000,
+    };
+    
+    const client = await tryConnect(nonTlsConfig, "non-TLS config");
+    if (client) return client;
+  } catch (error) {
+    console.error('Both TLS and non-TLS connections failed');
+  }
+  
+  return null;
+};
+
+// Initialize Redis connection
+(async () => {
+  try {
+    redisConnection = await initializeRedis();
+    
+    if (redisConnection) {
+      console.log('Redis connection established successfully');
+      
+      // Initialize queues
+      const queueOptions: QueueOptions = {
+        connection: redisConnection,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+          removeOnComplete: true,
+          removeOnFail: 100,
+        },
+      };
+      
+      nftMintQueue = new Queue('nft-mint-queue', queueOptions);
+      nftSaleQueue = new Queue('nft-sale-queue', queueOptions);
+      nftListingQueue = new Queue('nft-listing-queue', queueOptions);
+      compressedNftMintQueue = new Queue('compressed-nft-mint-queue', queueOptions);
+      console.log('✅ BullMQ queues initialized successfully');
+    } else {
+      console.warn('⚠️ Redis connection failed - BullMQ will be disabled');
+      process.env.ENABLE_BULL_MQ = 'false';
+    }
+  } catch (error) {
+    console.error('Failed to initialize Redis and queues:', error);
+    process.env.ENABLE_BULL_MQ = 'false';
+  }
+})();
 
 export { redisConnection };
 
@@ -58,35 +140,6 @@ export let nftMintQueue: Queue | null = null;
 export let nftSaleQueue: Queue | null = null;
 export let nftListingQueue: Queue | null = null;
 export let compressedNftMintQueue: Queue | null = null;
-
-if (ENABLE_BULL_MQ && redisConnection) {
-  try {
-    const queueOptions: QueueOptions = {
-      connection: redisConnection,
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-        removeOnComplete: true,
-        removeOnFail: 100,
-      },
-    };
-    
-    nftMintQueue = new Queue('nft-mint-queue', queueOptions);
-    nftSaleQueue = new Queue('nft-sale-queue', queueOptions);
-    nftListingQueue = new Queue('nft-listing-queue', queueOptions);
-    compressedNftMintQueue = new Queue('compressed-nft-mint-queue', queueOptions);
-    console.log('✅ BullMQ queues initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize BullMQ queues:', error);
-    console.warn('⚠️ Queue initialization failed - BullMQ will be disabled');
-    process.env.ENABLE_BULL_MQ = 'false';
-  }
-} else {
-  console.warn('⚠️ BullMQ is disabled - webhook processing will be synchronous');
-}
 
 export const getQueueForJobType = (jobType: string) => {
   if (!ENABLE_BULL_MQ || !redisConnection) {

@@ -9,9 +9,11 @@ import {
   refreshJobCacheTTL,
   addJobToCache,
 } from "../lib/redis-cache";
+import dotenv from "dotenv";
 
-const helius = new Helius("fdfd8c30-b1fd-4121-adec-94623d6ba124");
+dotenv.config();
 
+const helius = new Helius(process.env.HELIUS_API_KEY || "");
 const router: Router = express.Router();
 
 // POST /webhooks/log
@@ -338,17 +340,17 @@ router.post("/log", async (req: Request, res: Response) => {
   }
 });
 
-// Just for admin purpose and testing
-router.post("/create", (req: Request, res: Response) => {
+router.get("/create", (req: Request, res: Response) => {
   helius.createWebhook({
     accountAddresses: ["metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"],
-    authHeader: "bevats15",
-    webhookURL: "https://solana-indexer-backend.onrender.com/api/webhooks",
-    webhookType: WebhookType.RAW_DEVNET,
+    authHeader: process.env.WEBHOOK_AUTHORIZATION || "",
+    webhookURL: "https://solana-indexer-backend.onrender.com/webhooks/log",
+    webhookType: WebhookType.ENHANCED,
     transactionTypes: [
-      TransactionType.NFT_BID,
-      TransactionType.NFT_SALE,
+      TransactionType.COMPRESSED_NFT_MINT,
       TransactionType.NFT_MINT,
+      TransactionType.NFT_SALE,
+      TransactionType.NFT_LISTING,
     ],
     txnStatus: TxnStatus.SUCCESS,
   });

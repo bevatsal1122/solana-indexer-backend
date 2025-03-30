@@ -1,68 +1,160 @@
 # Solana Indexer Backend
 
-Backend service for indexing Solana blockchain data through Helius webhooks.
+A high-performance scalable backend service for indexing Solana blockchain events, processing webhooks, and managing job subscriptions. This service uses BullMQ with Redis for efficient asynchronous processing and Redis caching for optimized performance. It uses Helius webhooks to recieve updates for latest blockchain events.
 
 ## Features
 
-- Helius webhook integration
-- Robust database integration with Sequelize ORM
-- Support for different asset types (NFTs, tokens, etc.)
-- Queue-based processing with BullMQ for high scalability
+- **Webhook Processing**: Handle NFT mint, sale, listing, and other Solana blockchain events
+- **Job Subscription Management**: Create and manage webhook subscription jobs
+- **Queue-based Architecture**: Leverages BullMQ for reliable asynchronous processing
+- **Redis Caching**: Optimizes job lookups with intelligent caching
+- **Horizontal Scaling**: Designed to scale across multiple instances
 
-## Webhook Processing
+## Tech Stack
 
-The system now uses BullMQ for asynchronous processing of webhooks:
+- **Node.js & TypeScript**: Core runtime and language
+- **Express**: Web framework
+- **BullMQ**: Queue management for asynchronous processing
+- **Redis**: For queue management and caching
+- **Supabase**: Database and authentication
+- **Helius SDK**: For interacting with Solana blockchain data
 
-1. Webhook requests are received via the `/api/webhooks/log` endpoint
-2. Requests are queued in Redis using BullMQ
-3. Worker processes consume the queued jobs asynchronously
-4. Results are stored in the database
+## Prerequisites
 
-This approach allows the system to handle high volumes of webhook traffic efficiently, with built-in retry mechanisms and failure handling.
+- Node.js (v16+)
+- Redis server (local or cloud)
+- Supabase account
+- Helius API key
 
 ## Getting Started
 
-### Prerequisites
+### Clone the Repository
 
-- Node.js (v14+)
-- PostgreSQL
-- Redis (for BullMQ)
+```bash
+git clone https://github.com/yourusername/solana-indexer-backend.git
+cd solana-indexer-backend
+```
 
-### Installation
+### Install Dependencies
 
-1. Clone the repository
-2. Install dependencies:
+```bash
+npm install
+```
+
+### Set Up Environment Variables
+
+Create a `.env` file in the root directory using the provided `.env.example` as a template:
+
+```bash
+cp .env.example .env
+```
+
+Update the `.env` file with your actual credentials:
+
+- Supabase URL and key
+- Redis connection details
+- Helius API key
+- Other configuration options
+
+### Redis Setup
+
+The application requires Redis for BullMQ and caching. You can:
+
+1. **Use a local Redis instance**:
+
+   ```bash
+   # Install Redis (MacOS)
+   brew install redis
+
+   # Start Redis server
+   brew services start redis
    ```
-   npm install
+
+2. **Install Docker**:
+
+   ```bash
+   Download the docker.dmg from their official website and
+   install it locally.
    ```
-3. Create a `.env` file based on `.env.example`
-4. Start Redis (if using BullMQ):
-   ```
+
+3. **Run this command**:
+   ```bash
    npm run start:redis
    ```
-5. Start the application:
-   ```
+
+### Running the Application
+
+1. **Run this command**:
+   ```bash
    npm run dev
    ```
+2. **Call GET**:
+   ```bash
+   http://localhost:4000/webhooks/create
+   ```
 
-### Testing Webhooks
+## API Endpoints
 
-You can test the webhook processing with:
+- **GET /health**: Check service health status
+- **GET /api/jobs**: List all job subscriptions
+- **POST /api/jobs**: Create a new job subscription
+- **PUT /api/jobs/:id**: Update a job subscription
+- **DELETE /api/jobs/:id**: Delete a job subscription
+- **POST /api/webhooks/log**: Process webhooks from Helius
+
+## BullMQ Configuration
+
+BullMQ is used for asynchronous webhook processing. When enabled:
+
+1. Incoming webhooks are added to appropriate queues
+2. Worker processes handle these jobs independently
+3. Failed jobs are automatically retried with backoff
+
+To disable BullMQ and use synchronous processing, set `ENABLE_BULL_MQ=false` in your `.env`.
+
+For more details, see [README-BULLMQ.md](README-BULLMQ.md).
+
+## Redis Caching
+
+Redis caching is used to optimize job subscription lookups:
+
+1. Active job subscriptions are cached by job type
+2. Cache has a configurable TTL (default: 1 hour)
+3. Cache is refreshed when jobs are accessed
+4. Cache is updated when job statuses change
+
+## Environment Variables
+
+Create a `.env` file with the following variables:
 
 ```
-npm run test:webhook
+
+PORT=4000
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Set to false to disable BullMQ and use synchronous processing
+
+ENABLE_BULL_MQ=true
+
+# Redis Configuration (for BullMQ and caching)
+
+REDIS_URL=your_redis_url
+REDIS_HOST=your_redis_host
+REDIS_PORT=your_redis_port
+REDIS_PASSWORD=your_redis_password
+
+# Helius API Key for Solana data
+
+HELIUS_API_KEY=your_helius_api_key
+
+# Webhook Authentication
+
+WEBHOOK_AUTHORIZATION=your_webhook_auth_token
+
 ```
 
-## Scripts
+## License
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run test` - Run tests
-- `npm run test:cron` - Test cron jobs
-- `npm run test:webhook` - Test webhook processing
-- `npm run start:redis` - Start Redis using Docker
-
-## Documentation
-
-For more detailed information about the BullMQ implementation, see [README-BULLMQ.md](./README-BULLMQ.md).
+[MIT](LICENSE)
+```

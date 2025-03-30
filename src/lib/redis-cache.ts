@@ -4,11 +4,6 @@ import { redisConnection } from "./queue";
 const DEFAULT_TTL = 3600;
 const JOB_CACHE_PREFIX = "job_subscriptions:";
 
-/**
- * Get jobs from Redis cache by job type
- * @param jobType The type of job (nft_mint, nft_sale, etc.)
- * @returns Array of cached jobs or null if not found
- */
 export const getCachedJobsByType = async (
   jobType: string
 ): Promise<any[] | null> => {
@@ -33,12 +28,6 @@ export const getCachedJobsByType = async (
   }
 };
 
-/**
- * Cache jobs by job type with TTL
- * @param jobType The type of job (nft_mint, nft_sale, etc.)
- * @param jobs Array of jobs to cache
- * @param ttl TTL in seconds (defaults to 1 hour)
- */
 export const cacheJobsByType = async (
   jobType: string,
   jobs: any[],
@@ -58,11 +47,6 @@ export const cacheJobsByType = async (
   }
 };
 
-/**
- * Refresh TTL for cached jobs
- * @param jobType The type of job (nft_mint, nft_sale, etc.)
- * @param ttl TTL in seconds (defaults to 1 hour)
- */
 export const refreshJobCacheTTL = async (
   jobType: string,
   ttl: number = DEFAULT_TTL
@@ -81,12 +65,6 @@ export const refreshJobCacheTTL = async (
   }
 };
 
-/**
- * Add a job to existing cache
- * @param jobType The type of job (nft_mint, nft_sale, etc.)
- * @param job The job to add to cache
- * @param ttl TTL in seconds (defaults to 1 hour)
- */
 export const addJobToCache = async (
   jobType: string,
   job: any,
@@ -103,10 +81,9 @@ export const addJobToCache = async (
     let jobs = [];
     if (cachedData) {
       jobs = JSON.parse(cachedData);
-      // Check if job already exists in cache
       const exists = jobs.some((cachedJob: any) => cachedJob.id === job.id);
       if (exists) {
-        return true; // Job already in cache
+        return true;
       }
     }
 
@@ -119,11 +96,6 @@ export const addJobToCache = async (
   }
 };
 
-/**
- * Remove a job from cache
- * @param jobType The type of job (nft_mint, nft_sale, etc.)
- * @param jobId The ID of the job to remove
- */
 export const removeJobFromCache = async (
   jobType: string,
   jobId: string | number
@@ -145,14 +117,12 @@ export const removeJobFromCache = async (
     jobs = jobs.filter((job: any) => job.id !== jobId);
 
     if (jobs.length === initialLength) {
-      return false; // Job wasn't found
+      return false;
     }
 
     if (jobs.length === 0) {
-      // If no jobs left, remove the key altogether
       await redisConnection.del(cacheKey);
     } else {
-      // Update the cache with remaining jobs
       await redisConnection.set(
         cacheKey,
         JSON.stringify(jobs),

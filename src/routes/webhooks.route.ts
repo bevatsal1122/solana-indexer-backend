@@ -57,7 +57,6 @@ router.post("/log", async (req: Request, res: Response) => {
       });
     }
     let jobs = await getCachedJobsByType(jobType);
-    let cachingEnabled = !!jobs;
 
     if (!jobs) {
       console.log(
@@ -66,7 +65,6 @@ router.post("/log", async (req: Request, res: Response) => {
       jobs = [];
     } else {
       console.log(`Found ${jobs.length} cached jobs for type: ${jobType}`);
-      cachingEnabled = true;
     }
 
     console.log(`Querying Supabase for latest jobs of type: ${jobType}`);
@@ -101,11 +99,8 @@ router.post("/log", async (req: Request, res: Response) => {
         jobs = [...jobs, ...newJobs];
       }
 
-      if (cachingEnabled && dbJobs.length > 0) {
+      if (dbJobs.length > 0) {
         await cacheJobsByType(jobType, dbJobs);
-      } else if (dbJobs.length > 0) {
-        await cacheJobsByType(jobType, dbJobs);
-        cachingEnabled = true;
       }
     }
 
@@ -151,10 +146,7 @@ router.post("/log", async (req: Request, res: Response) => {
             tag: "INFO",
           });
 
-          // If we're using cache, refresh the TTL
-          if (cachingEnabled) {
-            await refreshJobCacheTTL(jobType);
-          }
+          await refreshJobCacheTTL(jobType);
 
           return {
             jobId: job.id,
@@ -183,78 +175,70 @@ router.post("/log", async (req: Request, res: Response) => {
 
       results = await Promise.all(jobPromises);
 
-      // After processing the cached jobs, check if there are new jobs in the database
-      // that aren't in the cache yet (e.g., recently added jobs)
-      if (cachingEnabled) {
-        const { data: allJobs, error } = await supabase
-          .from("indexer_jobs")
-          .select("*")
-          .eq("type", jobType.toUpperCase())
-          .eq("status", "running");
+      const { data: allJobs, error } = await supabase
+        .from("indexer_jobs")
+        .select("*")
+        .eq("type", jobType.toUpperCase())
+        .eq("status", "running");
 
-        if (!error && allJobs) {
-          // Find jobs that weren't in the cache
-          const cachedJobIds = jobs.map((job) => job.id);
-          const newJobs = allJobs.filter(
-            (job) => !cachedJobIds.includes(job.id)
+      if (!error && allJobs) {
+        // Find jobs that weren't in the cache
+        const cachedJobIds = jobs.map((job) => job.id);
+        const newJobs = allJobs.filter((job) => !cachedJobIds.includes(job.id));
+
+        // Process any new jobs and add them to the cache individually
+        if (newJobs.length > 0) {
+          console.log(
+            `Found ${newJobs.length} new jobs not in cache for type: ${jobType}`
           );
 
-          // Process any new jobs and add them to the cache individually
-          if (newJobs.length > 0) {
-            console.log(
-              `Found ${newJobs.length} new jobs not in cache for type: ${jobType}`
-            );
-
-            const newJobPromises = newJobs.map(async (job) => {
-              try {
-                // Add the job to the queue
-                const queueJob = await queue.add(
-                  jobType,
-                  {
-                    webhookData,
-                    jobInfo: job,
+          const newJobPromises = newJobs.map(async (job) => {
+            try {
+              // Add the job to the queue
+              const queueJob = await queue.add(
+                jobType,
+                {
+                  webhookData,
+                  jobInfo: job,
+                },
+                {
+                  attempts: 3,
+                  backoff: {
+                    type: "exponential",
+                    delay: 1000,
                   },
-                  {
-                    attempts: 3,
-                    backoff: {
-                      type: "exponential",
-                      delay: 1000,
-                    },
-                  }
-                );
+                }
+              );
 
-                // Add this job to the Redis cache
-                await addJobToCache(jobType, job);
+              await addJobToCache(jobType, job);
 
-                // Log that we've queued the job
-                await supabase.from("logs").insert({
-                  job_id: job.id,
-                  message: `Queued ${transactionType} for processing with signature: ${
-                    webhookData.signature || "N/A"
-                  } (new job found)`,
-                  tag: "INFO",
-                });
+              await supabase.from("logs").insert({
+                job_id: job.id,
+                message: `Queued ${transactionType} for processing with signature: ${
+                  webhookData.signature || "N/A"
+                } (new job found)`,
+                tag: "INFO",
+              });
 
-                return {
-                  jobId: job.id,
-                  status: "queued",
-                  queueJobId: queueJob.id,
-                  newlyAdded: true,
-                };
-              } catch (err: any) {
-                console.error(`Error queueing new job ${job.id}:`, err);
-                return {
-                  jobId: job.id,
-                  status: "error",
-                  error: err.message || "Unknown error",
-                  newlyAdded: true,
-                };
-              }
-            });
+              return {
+                jobId: job.id,
+                status: "queued",
+                queueJobId: queueJob.id,
+                newlyAdded: true,
+              };
+            } catch (err: any) {
+              console.error(`Error queueing new job ${job.id}:`, err);
+              return {
+                jobId: job.id,
+                status: "error",
+                error: err.message || "Unknown error",
+                newlyAdded: true,
+              };
+            }
+          });
 
-            const newResults = await Promise.all(newJobPromises);
-            results = [...results, ...newResults];
-          }
+          const newResults = await Promise.all(newJobPromises);
+          results = [...results, ...newResults];
         }
       }
 
@@ -264,7 +248,6 @@ router.post("/log", async (req: Request, res: Response) => {
         uptime: process.uptime(),
         webhookType: transactionType,
         processingMode: "async-queue",
-        cacheUsed: cachingEnabled,
         queuedJobs: results.length,
         results,
       });
@@ -279,9 +262,7 @@ router.post("/log", async (req: Request, res: Response) => {
             job,
             jobType
           );
-          if (cachingEnabled) {
-            await refreshJobCacheTTL(jobType);
-          }
+          await refreshJobCacheTTL(jobType);
           return result;
         } catch (err: any) {
           console.error(`Error processing job ${job.id}:`, err);
@@ -295,50 +276,46 @@ router.post("/log", async (req: Request, res: Response) => {
 
       results = await Promise.all(jobPromises);
 
-      if (cachingEnabled) {
-        const { data: allJobs, error } = await supabase
-          .from("indexer_jobs")
-          .select("*")
-          .eq("type", jobType.toUpperCase())
-          .eq("status", "running");
+      const { data: allJobs, error } = await supabase
+        .from("indexer_jobs")
+        .select("*")
+        .eq("type", jobType.toUpperCase())
+        .eq("status", "running");
 
-        if (!error && allJobs) {
-          const cachedJobIds = jobs.map((job) => job.id);
-          const newJobs = allJobs.filter(
-            (job) => !cachedJobIds.includes(job.id)
+      if (!error && allJobs) {
+        const cachedJobIds = jobs.map((job) => job.id);
+        const newJobs = allJobs.filter((job) => !cachedJobIds.includes(job.id));
+
+        if (newJobs.length > 0) {
+          console.log(
+            `Found ${newJobs.length} new jobs not in cache for type: ${jobType}`
           );
 
-          if (newJobs.length > 0) {
-            console.log(
-              `Found ${newJobs.length} new jobs not in cache for type: ${jobType}`
-            );
+          const newJobPromises = newJobs.map(async (job) => {
+            try {
+              const result = await processWebhookDataSync(
+                webhookData,
+                job,
+                jobType
+              );
+              await addJobToCache(jobType, job);
+              return {
+                ...result,
+                newlyAdded: true,
+              };
+            } catch (err: any) {
+              console.error(`Error processing new job ${job.id}:`, err);
+              return {
+                jobId: job.id,
+                status: "error",
+                error: err.message || "Unknown error",
+                newlyAdded: true,
+              };
+            }
+          });
 
-            const newJobPromises = newJobs.map(async (job) => {
-              try {
-                const result = await processWebhookDataSync(
-                  webhookData,
-                  job,
-                  jobType
-                );
-                await addJobToCache(jobType, job);
-                return {
-                  ...result,
-                  newlyAdded: true,
-                };
-              } catch (err: any) {
-                console.error(`Error processing new job ${job.id}:`, err);
-                return {
-                  jobId: job.id,
-                  status: "error",
-                  error: err.message || "Unknown error",
-                  newlyAdded: true,
-                };
-              }
-            });
-
-            const newResults = await Promise.all(newJobPromises);
-            results = [...results, ...newResults];
-          }
+          const newResults = await Promise.all(newJobPromises);
+          results = [...results, ...newResults];
         }
       }
 

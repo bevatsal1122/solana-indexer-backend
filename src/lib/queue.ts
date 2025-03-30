@@ -53,8 +53,8 @@ const initializeRedis = async () => {
   // First, try connecting with connection string if provided
   if (REDIS_URL) {
     try {
-      const client = await tryConnect(REDIS_URL, "connection string");
-      if (client) return client;
+    //   const client = await tryConnect(REDIS_URL, "connection string");
+    //   if (client) return client;
     } catch (error) {
       console.warn('Connection with REDIS_URL failed, will try other methods');
     }
@@ -88,8 +88,8 @@ const initializeRedis = async () => {
       connectTimeout: 10000,
     };
     
-    // const client = await tryConnect(nonTlsConfig, "non-TLS config");
-    // if (client) return client;
+    const client = await tryConnect(nonTlsConfig, "non-TLS config");
+    if (client) return client;
   } catch (error) {
     console.error('Both TLS and non-TLS connections failed');
   }

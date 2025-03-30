@@ -7,6 +7,9 @@ import morgan from "morgan";
 // Import routes
 import apiRoutes from "./routes/index";
 
+// Import cron jobs
+import { initCronJobs } from "./cron";
+
 // Load environment variables
 dotenv.config();
 
@@ -35,6 +38,9 @@ app.get("/", (req: Request, res: Response) => {
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: "Not Found" });
 });
+
+// Initialize cron jobs
+initCronJobs();
 
 // Start server
 app.listen(port, () => {

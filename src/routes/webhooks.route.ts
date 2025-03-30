@@ -7,20 +7,8 @@ import {
   Helius,
 } from "helius-sdk";
 import supabase from "../lib/supabase";
-import { Sequelize } from "sequelize";
-import {
-  NFTMint,
-  NFTSale,
-  NFTListing,
-  CompressedMintNFT,
-  initializeModels,
-} from "../models";
-import {
-  formatNFTSaleData,
-  formatNFTMintData,
-  formatNFTListingData,
-  formatCompressedMintNFTData,
-} from "../lib/formatters";
+import { getQueueForJobType, ENABLE_BULL_MQ } from "../lib/queue";
+import { processWebhookDataSync } from "../workers/webhookWorker";
 
 const helius = new Helius("fdfd8c30-b1fd-4121-adec-94623d6ba124");
 
@@ -30,8 +18,15 @@ const router: Router = express.Router();
 router.post("/log", async (req: Request, res: Response) => {
   const webhookData = req.body[0];
   const headers = req.headers;
-  console.dir(webhookData, { depth: null });
-  console.dir(headers, { depth: null });
+
+  const webhookAuthorization = process.env.WEBHOOK_AUTHORIZATION;
+
+  if (headers["authorization"] !== webhookAuthorization) {
+    return res.status(401).json({
+      status: "error",
+      message: "Unauthorized",
+    });
+  }
 
   if (!webhookData) {
     console.error("No webhook data provided");
@@ -86,83 +81,48 @@ router.post("/log", async (req: Request, res: Response) => {
       });
     }
 
-    const results = await Promise.all(
-      jobs.map(async (job) => {
+    // Check if BullMQ is enabled and get the appropriate queue
+    const queue = getQueueForJobType(jobType);
+    
+    let results;
+    
+    if (ENABLE_BULL_MQ && queue) {
+      // Use queue-based processing if BullMQ is available
+      const jobPromises = jobs.map(async (job) => {
         try {
-          // Create database connection string
-          const connectionString = `postgres://${
-            job.db_user
-          }:${encodeURIComponent(job.db_password)}@${job.db_host}:${
-            job.db_port
-          }/${job.db_name}`;
-
-          const sequelize = new Sequelize(connectionString, {
-            dialect: "postgres",
-            logging: false,
-            dialectOptions: {
-              connectTimeout: 30000,
+          // Add the job to the queue with the webhook data and job info
+          const queueJob = await queue.add(jobType, {
+            webhookData,
+            jobInfo: job
+          }, {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
             },
           });
 
-          await sequelize.authenticate();
-          console.log(`Connected to database for job ID: ${job.id}`);
-
-          initializeModels(sequelize);
-
-          let IndexerData: any;
-          let formattedData: any;
-          
-          if (jobType === "nft_mint") {
-            IndexerData = NFTMint;
-            formattedData = formatNFTMintData(webhookData);
-          } else if (jobType === "nft_sale") {
-            IndexerData = NFTSale;
-            formattedData = formatNFTSaleData(webhookData);
-          } else if (jobType === "nft_listing") {
-            IndexerData = NFTListing;
-            formattedData = formatNFTListingData(webhookData);
-          } else if (jobType === "compressed_nft_mint") {
-            IndexerData = CompressedMintNFT;
-            formattedData = formatCompressedMintNFTData(webhookData);
-          } else {
-            throw new Error("Invalid job type");
-          }
-
-          await IndexerData.sync({ force: false });
-
-          const createdRecord = await IndexerData.create(formattedData);
-
-          // Update entry count in the job
-          await supabase
-            .from("indexer_jobs")
-            .update({
-              entries_processed: job.entries_processed + 1,
-              last_updated: new Date().toISOString(),
-            })
-            .eq("id", job.id);
-
+          // Log that we've queued the job
           await supabase.from("logs").insert({
             job_id: job.id,
-            message: `Successfully processed ${transactionType} with signature: ${
+            message: `Queued ${transactionType} for processing with signature: ${
               webhookData.signature || "N/A"
             }`,
             tag: "INFO",
           });
 
-          await sequelize.close();
-
           return {
             jobId: job.id,
-            status: "success",
-            recordId: createdRecord.id,
+            status: "queued",
+            queueJobId: queueJob.id,
           };
         } catch (err: any) {
-          console.error(`Error processing job ${job.id}:`, err);
+          console.error(`Error queueing job ${job.id}:`, err);
 
           // Log error
           await supabase.from("logs").insert({
             job_id: job.id,
-            message: `Error processing ${transactionType}: ${
+            message: `Error queueing ${transactionType}: ${
               err.message || "Unknown error"
             }`,
             tag: "ERROR",
@@ -174,17 +134,50 @@ router.post("/log", async (req: Request, res: Response) => {
             error: err.message || "Unknown error",
           };
         }
-      })
-    );
+      });
 
-    res.status(200).json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      webhookType: transactionType,
-      processedJobs: results.length,
-      results,
-    });
+      results = await Promise.all(jobPromises);
+      
+      res.status(200).json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        webhookType: transactionType,
+        processingMode: "async-queue",
+        queuedJobs: results.length,
+        results,
+      });
+    } else {
+      // Fallback to synchronous processing if BullMQ is not available
+      console.log("Using synchronous processing (Redis/BullMQ not available)");
+      
+      const jobPromises = jobs.map(async (job) => {
+        try {
+          // Process the job directly (synchronously)
+          const result = await processWebhookDataSync(webhookData, job, jobType);
+          return result;
+        } catch (err: any) {
+          console.error(`Error processing job ${job.id}:`, err);
+          return {
+            jobId: job.id,
+            status: "error",
+            error: err.message || "Unknown error",
+          };
+        }
+      });
+
+      results = await Promise.all(jobPromises);
+      
+      res.status(200).json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        webhookType: transactionType,
+        processingMode: "synchronous",
+        processedJobs: results.length,
+        results,
+      });
+    }
   } catch (err: any) {
     console.error("Error in webhook processing:", err);
     res.status(500).json({

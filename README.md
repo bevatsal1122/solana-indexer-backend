@@ -31,7 +31,7 @@ A high-performance scalable backend service for indexing Solana blockchain event
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/solana-indexer-backend.git
+git clone https://github.com/bevatsal1122/solana-indexer-backend.git
 cd solana-indexer-backend
 ```
 

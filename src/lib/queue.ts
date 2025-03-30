@@ -71,8 +71,8 @@ const initializeRedis = async () => {
       connectTimeout: 10000,
     };
     
-    const client = await tryConnect(tlsConfig, "TLS config");
-    if (client) return client;
+    // const client = await tryConnect(tlsConfig, "TLS config");
+    // if (client) return client;
   } catch (error) {
     console.warn('TLS connection failed, trying without TLS');
   }
@@ -88,8 +88,8 @@ const initializeRedis = async () => {
       connectTimeout: 10000,
     };
     
-    const client = await tryConnect(nonTlsConfig, "non-TLS config");
-    if (client) return client;
+    // const client = await tryConnect(nonTlsConfig, "non-TLS config");
+    // if (client) return client;
   } catch (error) {
     console.error('Both TLS and non-TLS connections failed');
   }

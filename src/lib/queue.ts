@@ -14,13 +14,22 @@ let redisConnection: Redis | null = null;
 
 try {
   if (ENABLE_BULL_MQ) {
+    // Check if we need TLS based on the Redis URL or environment
+    const useTLS = process.env.REDIS_USE_TLS === 'true' || 
+                   REDIS_HOST.includes('redislabs') ||
+                   REDIS_HOST.includes('redis.cloud') ||
+                   REDIS_PORT === 6380;
+
+    console.log(`Connecting to Redis at ${REDIS_HOST}:${REDIS_PORT} with${useTLS ? '' : 'out'} TLS`);
+    
     redisConnection = new Redis({
       host: REDIS_HOST,
       port: REDIS_PORT,
       password: REDIS_PASSWORD || undefined,
       maxRetriesPerRequest: null,
-      connectTimeout: 10000,
-      tls: process.env.NODE_ENV === 'production' ? {} : undefined,
+      tls: useTLS ? {} : undefined,  // Enable TLS only when needed
+      // Don't use TLS for localhost
+      ...(REDIS_HOST === 'localhost' ? { tls: undefined } : {})
     });
 
     redisConnection.on('error', (err) => {

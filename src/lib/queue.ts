@@ -18,7 +18,6 @@ const tryConnect = async (config: any, description: string): Promise<Redis | nul
     console.log(`Attempting to connect to Redis with ${description}`);
     const client = new Redis(config);
     
-    // Test connection with timeout
     const connectPromise = new Promise<Redis>((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error(`Connection timeout for ${description}`));
@@ -50,7 +49,6 @@ const initializeRedis = async () => {
     return null;
   }
   
-  // First, try connecting with connection string if provided
   if (REDIS_URL) {
     try {
       const client = await tryConnect(REDIS_URL, "connection string");
@@ -60,24 +58,6 @@ const initializeRedis = async () => {
     }
   }
   
-  // Try with TLS
-  try {
-    const tlsConfig = {
-      host: REDIS_HOST,
-      port: REDIS_PORT,
-      password: REDIS_PASSWORD || undefined,
-      maxRetriesPerRequest: null,
-      tls: {},
-      connectTimeout: 10000,
-    };
-    
-    // const client = await tryConnect(tlsConfig, "TLS config");
-    // if (client) return client;
-  } catch (error) {
-    console.warn('TLS connection failed, trying without TLS');
-  }
-  
-  // Try without TLS
   try {
     const nonTlsConfig = {
       host: REDIS_HOST,
@@ -86,7 +66,6 @@ const initializeRedis = async () => {
       maxRetriesPerRequest: null,
       tls: undefined,
       connectTimeout: 10000,
-      verify_ssl_cert: false,
     };
     
     const client = await tryConnect(nonTlsConfig, "non-TLS config");
@@ -98,7 +77,6 @@ const initializeRedis = async () => {
   return null;
 };
 
-// Initialize Redis connection
 (async () => {
   try {
     redisConnection = await initializeRedis();
@@ -106,7 +84,6 @@ const initializeRedis = async () => {
     if (redisConnection) {
       console.log('Redis connection established successfully');
       
-      // Initialize queues
       const queueOptions: QueueOptions = {
         connection: redisConnection,
         defaultJobOptions: {

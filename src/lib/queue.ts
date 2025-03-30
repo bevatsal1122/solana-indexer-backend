@@ -51,8 +51,8 @@ const initializeRedis = async () => {
   
   if (REDIS_URL) {
     try {
-      const client = await tryConnect(REDIS_URL, "connection string");
-      if (client) return client;
+    //   const client = await tryConnect(REDIS_URL, "connection string");
+    //   if (client) return client;
     } catch (error) {
       console.warn('Connection with REDIS_URL failed, will try other methods');
     }
